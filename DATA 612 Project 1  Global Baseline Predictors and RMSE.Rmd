@@ -1,0 +1,159 @@
+---
+title: 'DATA 612 Project 1 | Global Baseline Predictors and RMSE'
+author: "Joseph E. Garcia"
+date: "June 8, 2019"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE)
+```
+## Details
+
+*Briefly describe the recommender system that you're going to build out from a business
+perspective, e.g. "This system recommends data science books to readers."
+
+*Find a dataset, or build out your own toy dataset. As a minimum requirement for complexity,
+please include numeric ratings for at least five users, across at least five items, with some missing
+data.
+
+*Load your data into (for example) an R or pandas dataframe, a Python dictionary or list of lists, (or
+another data structure of your choosing). From there, create a user-item matrix.
+
+*If you choose to work with a large dataset, you're encouraged to also create a small, relatively
+dense "user-item" matrix as a subset so that you can hand-verify your calculations.
+
+*Break your ratings into separate training and test datasets.
+
+*Using your training data, calculate the raw average (mean) rating for every user-item combination.
+
+*Calculate the RMSE for raw average for both your training data and your test data.
+
+*Using your training data, calculate the bias for each user and each item.
+
+*From the raw average, and the appropriate user and item biases, calculate the baseline predictors
+for every user-item combination.
+
+*Calculate the RMSE for the baseline predictors for both your training data and your test data.
+
+*Summarize your results.
+
+## Data Prep
+
+```{r}
+set.seed(643)
+n <- 15
+percent <- .3
+probs <- c(1-percent, percent)
+users <- paste("User", LETTERS[1:n], sep="")
+items <- paste("Item", LETTERS[1:n], sep="")
+
+toyDF <- as.data.frame(replicate(n, floor(runif(n, 1,6))))
+
+toyDF <- as.data.frame(
+    lapply(toyDF, function(df) df[sample(c(TRUE, NA), prob = probs, size = length(df), replace = TRUE) ]), 
+    row.names = users, 
+    col.names = items)
+knitr::kable(toyDF)
+```
+
+## Data Visualization
+
+```{r}
+heatmap(as.matrix(toyDF), Rowv=NA, Colv=NA, col = terrain.colors(256))
+```
+
+## Separate Data 
+
+```{r}
+train_row <- sample(n, size = floor(2/3 * n), replace=F)
+train <- toyDF[train_row, ]
+test <- toyDF[-train_row, ]
+```
+
+## Calculations
+
+
+```{r}
+train_raw_avg <- mean(as.matrix(train), na.rm=TRUE)
+train_raw_avg
+```
+
+
+```{r}
+RMSE <- function(observed, predicted) {
+   
+    sqrt(mean((observed - predicted)^2, na.rm=TRUE))
+}
+trainRMSE <- RMSE(as.matrix(train), train_raw_avg)
+trainRMSE
+testRMSE <- RMSE(as.matrix(test), train_raw_avg)
+testRMSE
+```
+
+
+```{r}
+user_bias_train <- rowMeans(as.matrix(train), na.rm = T) - train_raw_avg
+user_bias_test <- rowMeans(as.matrix(test), na.rm = T) - train_raw_avg
+item_bias_train <- colMeans(as.matrix(train), na.rm = T) - train_raw_avg
+user_bias_train
+user_bias_test
+item_bias_train
+```
+
+
+
+```{r}
+baseline_predictor <- function(rawAvg, userBias, itemBias) {
+   
+    userlist <- names(userBias)
+    itemlist <- names(itemBias)
+    df <- data.frame()
+    
+    for (i in userBias) {
+        UserPred <- rawAvg + i + itemBias
+        df <- rbind(df, UserPred)
+    }
+    
+ 
+    df[df > 5] <- 5
+    df[df < 1] <- 1
+    
+    row.names(df) <- userlist
+    names(df) <- itemlist
+    df
+}
+trainPredictions <- baseline_predictor(train_raw_avg, user_bias_train, item_bias_train)
+heatmap(as.matrix(trainPredictions), Rowv=NA, Colv=NA, scale = 'none', col = topo.colors(256))
+knitr::kable(trainPredictions)
+testPredictions <- baseline_predictor(train_raw_avg, user_bias_test, item_bias_train)
+knitr::kable(testPredictions)
+```
+
+
+
+```{r}
+trainPredictionRSME <- RMSE(as.matrix(train), as.matrix(trainPredictions))
+trainPredictionRSME
+testPredictionRSME <- RMSE(as.matrix(test), as.matrix(testPredictions))
+testPredictionRSME
+```
+
+## Summary
+
+
+```{r}
+trainVec <- c(trainRMSE,
+              trainPredictionRSME,
+              (1-trainPredictionRSME/trainRMSE)*100)
+testVec <- c(testRMSE, 
+             testPredictionRSME, 
+             (1-testPredictionRSME/testRMSE)*100)
+summary <- data.frame(trainVec, testVec)
+names(summary) <- c("train", "test")
+row.names(summary) <- c("Raw Average RMSE", "Simple Predictor RMSE", "Percent Improvement")
+knitr::kable(summary)
+```
+
+
