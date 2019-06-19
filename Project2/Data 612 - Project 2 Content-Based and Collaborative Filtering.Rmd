@@ -1,0 +1,239 @@
+---
+title: "Data 612 - Project 2 Content-Based and Collaborative Filtering"
+author: "Joseph E. Garcia"
+date: "June 16, 2019"
+output: html_document
+---
+The goal of this assignment is to try out different ways of implementing and configuring a recommender, and to evaluate different approaches.
+
+
+```{r results='hide', message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(recommenderlab)
+library(knitr)
+```
+
+
+```{r}
+movies = read.csv("https://raw.githubusercontent.com/jgarcia71/Data-612-Projects-and-Assignments-Summer-2019/master/Project2/movies.csv", 
+                   header = TRUE, sep = ",", stringsAsFactors = FALSE)
+ratings = read.csv("https://raw.githubusercontent.com/jgarcia71/Data-612-Projects-and-Assignments-Summer-2019/master/Project2/ratings.csv", 
+                    header = TRUE, sep =",", stringsAsFactors = FALSE)
+kable(head(movies))
+kable(head(ratings))
+```
+
+```{r}
+x = head(data.frame(table(ratings$userId) %>% sort(decreasing =T)), 10000)
+colnames(x) = c("userId", "count")
+ratex = merge(ratings , x, by="userId")
+submovie = subset(movies, select = c("movieId", "title"))
+subrating = subset(ratex, select = c("userId","movieId", "rating"))
+prematrix = subset(merge(subrating, submovie, by="movieId"), select = c("userId","rating","title"))
+y = head(data.frame(table(prematrix$title) %>% sort(decreasing =T)), 500)
+colnames(y) = c("title", "count2")
+prematrix2 = subset(merge(prematrix, y, by="title"), select = c("title","userId","rating"))
+kable(head(prematrix2))
+```
+
+
+```{r}
+matrix = spread(prematrix2, title, rating)
+ex = as.matrix((matrix[-c(401:600),-1]))
+data = as(ex, "realRatingMatrix")
+data = data[rowCounts(data) > 30, colCounts(data) > 50]
+data
+```
+
+
+
+```{r}
+# Data Exploration
+image(data[rowCounts(data) > 150,
+colCounts(data) > 150], main = "Heatmap of the Top Users
+and Movies")
+```
+
+
+```{r}
+# Rating Scores
+qplot(getRatings(data), geom="bar", main = "Ratings", ylab = "Rating ",xlab = "Scores", fill=I("yellow"))
+```
+
+```{r}
+# Ratings per Movie
+qplot(colMeans(data), geom="bar", main = "Movies", ylab = "Rating ",xlab = "per movie", fill=I("orange"))
+```
+
+```{r}
+# User Ratings
+qplot(rowMeans(data), geom="bar", main = "User Ratings",ylab = "Rating ", xlab = "Per User", fill=I("red"))
+```
+
+
+```{r}
+# Splitting training and testing
+values = sample(x = c(TRUE, FALSE), size = nrow(data),
+                      replace = TRUE, prob = c(0.8, 0.2))
+train = data[values, ]
+test = data[!values, ]
+```
+
+
+
+
+```{r}
+# Building the Model
+item_item = Recommender(data = train, method = "IBCF",
+                          parameter = list(k = 30, method = "Cosine"))
+item_item
+```
+
+```{r}
+# Making Recommendations
+n_recommended = 6
+predictions = predict(object = item_item, newdata = test,
+                       n = n_recommended)
+predictions
+item_pred = function(idNum){
+  user_x = predictions@items[[idNum]]
+  user_x = predictions@itemLabels[user_x]
+  return(data.frame(user_x))
+}
+item_pred(1)
+```
+
+
+```{r}
+recc_matrix = sapply(predictions@items, function(x){
+colnames(data)[x]
+})
+number_of_items = data.frame(table(unlist(recc_matrix, use.names=FALSE)))
+sorted = number_of_items[order(number_of_items$Freq, decreasing = T),][1:10,]
+kable(sorted)
+ggplot(data=sorted, aes(x=Var1, y=Freq)) +
+  geom_bar(stat="identity", fill="brown")+
+  geom_text(aes(label=Freq), color="green", size=4)+
+  theme_minimal()+
+  xlab("Titles")+
+  coord_flip()
+```
+
+
+
+## Building the Model
+
+Because the recommender system created is User-to-User, the "UBCF" method (User Based Collaborative Filter method) was used, where the closeness between users was measured using the cosine.
+```{r}
+user_user = Recommender(data = train, method = "UBCF", parameter = list(k = 30, method = "Cosine"))
+user_user
+```
+
+
+```{r}
+# recommending
+n_recommended = 6
+predictions2 = predict(object = user_user, newdata = test,
+                          n = n_recommended)
+predictions2
+user_pred = function(idNum){
+  user_x = predictions2@items[[idNum]]
+  user_x = predictions2@itemLabels[user_x]
+  return(data.frame(user_x))
+}
+user_pred(1)
+```
+
+
+```{r}
+recc_matrix2 = sapply(predictions2@items, function(x){
+colnames(data)[x]
+})
+number_of_items = data.frame(table(unlist(recc_matrix2, use.names=FALSE)))
+sorted = number_of_items[order(number_of_items$Freq, decreasing = T),][1:10,]
+kable(sorted)
+ggplot(data=sorted, aes(x=Var1, y=Freq)) +
+  geom_bar(stat="identity", fill="yellow")+
+  geom_text(aes(label=Freq), color="red", size=3)+
+  theme_minimal()+
+  xlab("Titles")+
+  coord_flip()
+```
+
+
+
+```{r}
+# Comparison of IBCF and UBCF
+set.seed(101)
+minimum = min(rowCounts(data))
+minimum
+```
+
+
+```{r}
+evaluation = evaluationScheme(data = data, method = "cross-validation", k = 10, given = 10, goodRating = 3.5)
+evaluation
+ev_train = getData(evaluation, "train")
+ev_known = getData(evaluation, "known")
+ev_unknown = getData(evaluation, "unknown")
+```
+
+
+```{r}
+# Item
+item_model = Recommender(data = ev_train, method = "IBCF", parameter = list(method = "Cosine"))
+item_model_pred = predict(object = item_model, newdata = ev_known, n = 10, type = "ratings")
+item = calcPredictionAccuracy(x = item_model_pred, data = ev_unknown, byUser = FALSE)
+# User
+user_model = Recommender(data = ev_train, method = "UBCF", parameter = list(method = "Cosine"))
+user_model_pred = predict(object = user_model, newdata = ev_known, n = 10, type = "ratings")
+user = calcPredictionAccuracy(x = user_model_pred, data = ev_unknown, byUser = FALSE)
+# Comparison
+kable(rbind(item, user))
+```
+
+
+```{r}
+eval_sets = evaluationScheme(data = data, method = "cross-validation", k = 4, given = 10, goodRating = 3.5)
+I_results = evaluate(x = eval_sets, method = "IBCF", n = seq(10, 100, 10))
+kable(head(getConfusionMatrix(I_results)[[1]]))
+U_results = evaluate(x = eval_sets, method = "UBCF", n = seq(10, 100, 10))
+kable(head(getConfusionMatrix(U_results)[[1]]))
+```
+
+
+```{r}
+# ROC plots
+plot(I_results, annotate = TRUE, main = "ROC curve of IBCF",type="o",
+col="blue")
+plot(U_results, annotate = TRUE, main = "ROC curve of UBCF",type="o",
+col="red")
+```
+
+
+
+```{r}
+# Comparison of Model Approaches
+mult_models = list(
+  IBCF_cos = list(name = "IBCF", param = list(method = "Cosine")),
+  IBCF_pearson = list(name = "IBCF", param = list(method = "pearson")),
+  UBCF_cos = list(name = "UBCF", param = list(method = "Cosine")),
+  UBCF_pearson = list(name = "UBCF", param = list(method = "pearson")),
+  Random = list(name = "RANDOM", param = NULL),
+  Popular = list(name = "POPULAR", param = NULL)
+)
+
+models = evaluate(eval_sets, mult_models, n= c(1, 5, seq(10, 100, 10)))
+```
+
+
+```{r}
+# Precision/Recall plots models
+plot(models, annotate = T, legend="topleft")
+plot(models, "prec/rec", annotate = F, main="Precision/Recall", legend="topright")
+```
+
+
+
