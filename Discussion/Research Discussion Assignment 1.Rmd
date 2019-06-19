@@ -1,0 +1,32 @@
+---
+title: "Research Discussion Assignment 1"
+author: "Joseph E. Garcia"
+date: "June 12, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Attacks on Recommender System
+
+Attacks on Recommender System
+
+Read the article below and consider how to handle attacks on recommender systems. Can you think of a similar example where a collective effort to alter the workings of content recommendations have been successful? How would you design a system to prevent this kind of abuse?
+
+Travis M. Andrews, The Washington Post (2017): Wisdom of the crowd? IMDb users gang up on Christian Bale's new movie before it even opens.
+
+---
+I don't think you can prevent this abuse, not fully, but I think that you can get people curious enough to wonder why a movie tanked before it even came out. One of the ways to handle this on a more general level is to know the people behind the data, so maybe focus on recommender system access and security. I don't think I can recall one specific example, but this kind of sabotage can easily take place on the local level. A business might seek to increase their traffic by increasing reviews or ratings. Here is an example of a method to sway individuals using Yelp's system. 
+Have a section for trusted critics and their scores. Maybe even have a small section with the top 10 words from a sentiment analysis. This, together with the critics' ratings, may give a better idea as to where the dichotomy of views stems from. Or maybe even have a small section showing ratings from other popular websites. I'm not sure what the levels of determination are for a large group of individuals to sabotage not one but all of the recommender systems, but that's a whole lot of effort to put into taking down one movie. Maybe a weighted recommender system? If you've been with the site long enough to be trusted, your input holds more weight than someone who just logged on.
+
+Sources:
+
+https://www.theverge.com/2017/8/31/16232180/ai-fake-reviews-yelp-amazon
+
+
+
+
+
+
