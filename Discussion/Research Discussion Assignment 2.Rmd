@@ -1,0 +1,14 @@
+---
+title: "Research Discussion Assignment 2"
+author: "Joseph E. Garcia"
+date: "June 25, 2019"
+output: html_document
+---
+For this discussion item, please watch the following talk and summarize what you found to be the most important or interesting points. The first half will cover some of the mathematical techniques covered in this unit's reading and the second half some of the data management challenges in an industrial-scale recommendation system. Watch Music Recommendations at Scale with Spark - Christopher Johnson (Spotify)https://www.youtube.com/watch?v=3LBgiFch4_g
+
+At the time of Chris Johnson's talk at Spark Summit 2014, he reported Spotify had 40 million users, and the main theme of the presentation was reducing I/O overhead and processing times while working on a massive amount of data. This was done not just by changing the data used, the algorithm used to process the data, or the system used, but a combination of all three. For the data itself, rather than use explicit ratings (thumbs up/down, 1-5 scale), Spotify utilizes implicit ratings based on streams (1 = played, 0 = not streamed).  
+
+For the algorithm, the matrix factorization technique of Alternating Least Squares is used. Since matrix factorization takes the original matrix ($R$) and turns it into two vectors ($U$ and $P$) that, when multiplied together approximate the original ($U \times P = R$). By fixing one of the vectors and solving (like linear regression) for the other, then alternating until convergence (little or no change in the two vectors). 
+
+Lastly, for the system, Spotify is using Hadoop MapReduce, but in Chris Johnson's talk, was demonstrating the difference between Hadoop, and the reduction in processing time using Spark (which runs on the Hadoop framework, it's not an entirely different system), which processes everything in memory (and can even use the disk if everything doesn't fit into memory). However, at the the presentation, Spotify had not implemented Spark due to issues of using more than 10% of its user base in testing.  
+
