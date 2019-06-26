@@ -1,0 +1,133 @@
+---
+title: "Data 612 - Project#3 Matrix Factorization Methods"
+author: "Joseph E. Garcia"
+date: "June 20, 2019"
+output: html_document
+---
+The goal of this assignment is give you practice working with Matrix Factorization techniques.
+Your task is implement a matrix factorization method-such as singular value decomposition (SVD) or
+Alternating Least Squares (ALS)-in the context of a recommender system.
+You may approach this assignment in a number of ways. You are welcome to start with an existing
+recommender system written by yourself or someone else. Remember as always to cite your sources,
+so that you can be graded on what you added, not what you found.
+SVD can be thought of as a pre-processing step for feature engineering. You might easily start with
+thousands or millions of items, and use SVD to create a much smaller set of "k" items (e.g. 20 or 70).
+
+# Data input
+
+## Loading libraries/dataset
+```{r results='hide', message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(recommenderlab)
+library(reshape2)
+library(knitr)
+```
+
+```{r}
+movies = read.csv("https://raw.githubusercontent.com/jgarcia71/Data-612-Projects-and-Assignments-Summer-2019/master/Project%20%233/movies.csv", 
+                   header = TRUE, sep = ",", stringsAsFactors = FALSE)
+ratings = read.csv("https://raw.githubusercontent.com/jgarcia71/Data-612-Projects-and-Assignments-Summer-2019/master/Project%20%233/ratings.csv", 
+                    header = TRUE, sep =",", stringsAsFactors = FALSE)
+kable(head(ratings))
+kable(head(movies))
+```
+
+  
+```{r}
+movRate = merge(movies, ratings, by = "movieId")
+new = subset(movRate, select = c("title", "userId", "rating"))
+new = unique(new)
+kable(head(new))
+matrix = acast(new, userId~title, value.var="rating", fun=sum)
+```
+
+
+```{r}
+premat = as(matrix, "realRatingMatrix")
+data = premat[sample(671,200), sample(9064, 3000)]
+data
+```
+
+# Data Exploration
+.
+```{r}
+# Ratings
+qplot(new$rating, geom="histogram", main = "Histogram of Ratings", xlab = "Rating Scores", binwidth = 0.5, fill=I("yellow"))
+```
+
+```{r}
+# Ratings(Movie)
+new2 = new %>% group_by(title) %>%
+  summarise(count = mean(rating))
+qplot(new2$count, geom="histogram", main = "Histogram of Movie Ratings", xlab = "Average Rating Scores Per Movie", binwidth = 0.5, fill=I("blue"))
+```
+
+
+```{r}
+# Ratings(User)
+new3 = new %>% group_by(userId) %>%
+  summarise(count = mean(rating))
+qplot(new3$count, geom="histogram", main = "Histogram of User Ratings", xlab = "Average Rating Scores Per User", binwidth = 0.5, fill=I("red"))
+```
+
+
+```{r}
+#Evaluation
+evaluation = evaluationScheme(data, method="split", train=0.8, given=10, goodRating=3.5)
+ev_train = getData(evaluation, "train")
+ev_known = getData(evaluation, "known")
+ev_unknown = getData(evaluation, "unknown")
+```
+
+# SVD
+
+```{r}
+example = as.matrix(data.frame(c(1,3,4,0), c(1,2,4,0), c(0,0,0,5)))
+example
+svd(example)
+```
+
+
+```{r}
+svd_train = Recommender(ev_train, "SVD")
+svd_preds = predict(svd_train, ev_known, type = "ratings")
+getRatingMatrix(svd_preds[c(1,9,17,25,33),1:5])
+```
+
+
+# Comparison
+
+
+```{r}
+
+ubcf_train = Recommender(ev_train, "UBCF")
+ubcf_preds = predict(ubcf_train, ev_known, type = "ratings")
+
+pop_train = Recommender(ev_train, "POPULAR")
+pop_preds = predict(pop_train, ev_known, type = "ratings")
+accuracy = rbind(
+  SVD = calcPredictionAccuracy(svd_preds, ev_unknown),
+  UBCF = calcPredictionAccuracy(ubcf_preds, ev_unknown),
+  POPULAR = calcPredictionAccuracy(pop_preds, ev_unknown)
+  )
+kable(as.data.frame(accuracy))
+```
+
+
+```{r}
+eval_sets = evaluationScheme(data = data, method = "cross-validation", k = 4, given = 10, goodRating = 3.5)
+mult_models = list(
+  UBCF = list(name = "UBCF", param = list(method = "pearson")),
+  Popular = list(name = "POPULAR", param = NULL),
+  SVD = list(name = "SVD", param = NULL)
+)
+
+models = evaluate(eval_sets, mult_models, n= c(1, 5, seq(10, 100, 10)))
+
+plot(models, annotate = T, legend="topleft")
+plot(models, "prec/rec", annotate = F, main="Precision/Recall", legend="topright")
+```
+
+
