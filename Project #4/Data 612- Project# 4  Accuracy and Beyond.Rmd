@@ -1,0 +1,189 @@
+---
+title: "Data 612-Project# 4  Accuracy and Beyond"
+author: "Joseph E. Garcia"
+date: "June 27, 2019"
+output: html_document
+---
+The goal of this assignment is give you practice working with accuracy and other recommender system metrics.
+
+## Loading libraries/dataset
+```{r results='hide', message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(recommenderlab)
+library(reshape2)
+library(knitr)
+```
+
+
+## Dataset
+```{r}
+music1 = read.csv("https://raw.githubusercontent.com/jgarcia71/Data-612-Projects-and-Assignments-Summer-2019/master/Project%20%234/Amazon_Music.csv", header = T)
+music2 = read.csv("https://raw.githubusercontent.com/jgarcia71/Data-612-Projects-and-Assignments-Summer-2019/master/Project%20%234/Music_2.csv", header = T)
+music = rbind(music1, music2)
+music = music[,1:3]
+kable(head(music))
+```
+
+## Creating Matrix
+
+```{r}
+set.seed(101)
+a = data.frame(head(sort(table(music$user), decreasing = T), 1835))
+colnames(a) = c("user", "count")
+user_merge = merge(music, a, by = "user")
+b = data.frame(head(sort(table(user_merge$item), decreasing = T), 988))
+colnames(b) = c("item", "count")
+item_merge = merge(user_merge, b, by = "item")
+final = subset(item_merge, select = c("user", "item", "rating"))
+```
+
+```{r}
+data = as(final, "realRatingMatrix")
+data = data[rowCounts(data) > 5, colCounts(data) > 5]
+data
+print(paste("Minimum number of ratings: ", min(rowCounts(data))))
+```
+
+# Data Exploration
+
+```{r}
+image(data, main = "Heatmap of Users and Music")
+```
+
+
+```{r}
+qplot(final$rating, geom="histogram", main = "Histogram of Ratings", xlab = "Rating Scores", ylab = "Scale", binwidth = 0.5, fill=I("green"),col=I("white"))
+```
+
+## Ratings per Music
+```{r}
+new = final %>% group_by(item) %>%
+  summarise(count = mean(rating))
+qplot(new$count, geom="histogram", main = "Histogram of Music Ratings", xlab = "Average Rating Scores Per Music", ylab = "Scale", binwidth = 0.25, fill=I("lightblue"),col=I("brown"))
+```
+
+## Ratings per User
+```{r}
+new2 = final %>% group_by(user) %>%
+  summarise(count = mean(rating))
+qplot(new2$count, geom="histogram", main = "Histogram of User Ratings", xlab = "Average Rating Scores Per User",  ylab = "Scale",binwidth = 0.25, fill=I("yellow"),col=I("red"))
+```
+
+
+## Evaluation
+```{r}
+evaluation = evaluationScheme(data, method="split", train=0.8, given=5, goodRating=4)
+ev_train = getData(evaluation, "train")
+ev_known = getData(evaluation, "known")
+ev_unknown = getData(evaluation, "unknown")
+```
+
+
+## Recommender
+```{r}
+
+ubcf_train = Recommender(ev_train, "UBCF")
+ubcf_preds = predict(ubcf_train, ev_known, type = "ratings")
+ubcf_preds
+ibcf_train = Recommender(ev_train, "IBCF")
+ibcf_preds = predict(ibcf_train, ev_known, type = "ratings")
+
+pop_train = Recommender(ev_train, "POPULAR")
+pop_preds = predict(pop_train, ev_known, type = "ratings")
+
+svd_train = Recommender(ev_train, "SVD")
+svd_preds = predict(svd_train, ev_known, type = "ratings")
+```
+
+
+## accuracy
+
+```{r}
+accuracy = rbind(
+  UBCF = calcPredictionAccuracy(ubcf_preds, ev_unknown),
+  IBCF = calcPredictionAccuracy(ibcf_preds, ev_unknown),
+  SVD = calcPredictionAccuracy(svd_preds, ev_unknown),
+  POPULAR = calcPredictionAccuracy(pop_preds, ev_unknown)
+  )
+acc_df = round(as.data.frame(accuracy), 3)
+kable(acc_df[order(acc_df$RMSE),])
+```
+
+
+```{r}
+eval_sets = evaluationScheme(data = data, method = "cross-validation", k = 4, given = 5, goodRating = 4)
+mult_models = list(
+  UBCF = list(name = "UBCF", param = list(method = "pearson")),
+  IBCF = list(name = "IBCF", param = list(method = "pearson")),
+  Popular = list(name = "POPULAR", param = NULL),
+  SVD = list(name = "SVD", param = NULL)
+)
+
+models = evaluate(eval_sets, mult_models, n= c(1, 5, seq(10, 100, 10)))
+
+plot(models, annotate = T, legend="topleft")
+```
+
+
+```{r}
+pres = predict(pop_train, 1:100 , data = ev_train, n = 20)
+pres@items[1:5]
+```
+
+
+```{r}
+values = unlist(as.vector(head(sample(pres@items[1:100]), 1)), use.names=FALSE)
+values
+```
+
+```{r}
+data2 = data[,-values]
+evaluation2 = evaluationScheme(data2, method="split", train=0.8, given=5, goodRating=4)
+
+ev_train2 = getData(evaluation2, "train")
+ev_known2 = getData(evaluation2, "known")
+ev_unknown2 = getData(evaluation2, "unknown")
+
+seren_ubcf_train = Recommender(ev_train2, "UBCF")
+seren_ubcf_preds = predict(seren_ubcf_train, ev_known2, type = "ratings")
+
+seren_ibcf_train = Recommender(ev_train2, "IBCF")
+seren_ibcf_preds = predict(seren_ibcf_train, ev_known2, type = "ratings")
+
+seren_pop_train = Recommender(ev_train2, "POPULAR")
+seren_pop_preds = predict(seren_pop_train, ev_known2, type = "ratings")
+
+seren_svd_train = Recommender(ev_train2, "SVD")
+seren_svd_preds = predict(seren_svd_train, ev_known2, type = "ratings")
+```
+
+## UBCF, IBCF and SVD algorithms 
+```{r}
+eval_sets2 = evaluationScheme(data = data2, method = "cross-validation", k = 4, given = 5, goodRating = 4)
+mult_models2 = list(
+  seren_UBCF = list(name = "UBCF", param = list(method = "pearson")),
+  seren_IBCF = list(name = "IBCF", param = list(method = "pearson")),
+  seren_Popular = list(name = "POPULAR", param = NULL),
+  seren_SVD = list(name = "SVD", param = NULL)
+)
+
+models2 = evaluate(eval_sets2, mult_models2, n= c(1, 5, seq(10, 100, 10)))
+
+plot(models2, annotate = T, legend="topleft")
+```
+
+## Accuracy Comparisons
+```{r}
+accuracy2 = rbind(
+  seren_UBCF = calcPredictionAccuracy(seren_ubcf_preds, ev_unknown2),
+  seren_IBCF = calcPredictionAccuracy(seren_ibcf_preds, ev_unknown2),
+  seren_SVD = calcPredictionAccuracy(seren_svd_preds, ev_unknown2),
+  seren_POPULAR = calcPredictionAccuracy(seren_pop_preds, ev_unknown2)
+  )
+acc_df2 = round(as.data.frame(accuracy2), 3)
+comp = rbind(acc_df, acc_df2)
+kable(comp[order(comp$RMSE),])
+```
+
