@@ -1,0 +1,18 @@
+---
+title: "Research Discussion Assignment 3"
+author: "Joseph E. Garcia"
+date: "June 24, 2019"
+output: html_document
+---
+#### As more systems and sectors are driven by predictive analytics, there is increasing awareness of the possibility and pitfalls of algorithmic discrimination. In what ways do you think Recommender Systems reinforce human bias? Reflecting on the techniques we have covered, do you think recommender systems reinforce or help to prevent unethical targeting or customer segmentation?  Please provide one or more examples to support your arguments.
+
+I believe that it is possible for recommender systems to open up access. It would take careful programming, but if race, gender, zip code etc, were removed from recommender systems. The search results could open up opportunities for people where we should be given access to ads that may be a little different from what the nearest neighbor would predict. Evan Estola brought up few examples which are: Men were shown ads for higher paying jobs which means that when women are not given access to the same ads as men, it is perpetuating a paradigm in our society which makes it harder for women to climb the professional ladder.This comes at a price as people may not feel like the recommendation is as accurate, but there could be a large societal benefit as we access more information.
+
+
+#### References:
+
+Evan Estola (2016): When Recommendations Systems Go Bad; MLconf SEA 2016
+
+Rishabh Jain (2016): When Recommendation Systems Go Bad
+
+Moritz Hardt, Eric Price, Nathan Srebro (2016):  Equality of Opportunity in Supervised Learning
