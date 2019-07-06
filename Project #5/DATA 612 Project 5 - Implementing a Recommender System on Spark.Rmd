@@ -1,0 +1,124 @@
+---
+title: "DATA 612 Project 5 - Implementing a Recommender System on Spark"
+author: "Joseph E. Garcia"
+date: "July 6, 2019"
+output: html_document
+---
+The goal of this project is give you practice beginning to work with a distributed recommender system.
+It is sufficient for this assignment to build out your application on a single node.
+Adapt one of your recommendation systems to work with Apache Spark and compare the
+performance with your previous iteration. Consider the efficiency of the system and the added
+complexity of using Spark. You may complete the assignment using PySpark (Python), SparkR (R) ,
+sparklyr (R), or Scala.
+
+
+### Loading libraries
+```{r results='hide', message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(recommenderlab)
+library(sparklyr)
+library(knitr)
+```
+
+### Loading dataset
+```{r}
+movies = read.csv("https://raw.githubusercontent.com/jgarcia71/Data-612-Projects-and-Assignments-Summer-2019/master/Project%20%235/movies.csv", 
+                   header = TRUE, sep = ",", stringsAsFactors = FALSE)
+ratings = read.csv("https://raw.githubusercontent.com/jgarcia71/Data-612-Projects-and-Assignments-Summer-2019/master/Project%20%235/ratings.csv", 
+                    header = TRUE, sep =",", stringsAsFactors = FALSE)
+kable(head(movies))
+kable(head(ratings))
+```
+
+## Original Recomendation System
+
+```{r}
+movRate = merge(movies, ratings, by = "movieId")
+new = subset(movRate, select = c("title", "userId", "rating"))
+data = as(new, "realRatingMatrix")
+data = data[rowCounts(data) > 5, colCounts(data) > 5]
+data
+```
+
+```{r}
+set.seed(100)
+minimum = min(rowCounts(data))
+print(paste0("Minimum number of ratings: ", min(rowCounts(data))))
+```
+
+```{r}
+evaluation = evaluationScheme(data = data, method = "cross-validation", k = 10, given = 5, goodRating = 3.5)
+evaluation
+ev_train = getData(evaluation, "train")
+ev_known = getData(evaluation, "known")
+ev_unknown = getData(evaluation, "unknown")
+start1 = Sys.time()
+als_model = Recommender(data = ev_train, method = "ALS")
+als_model_pred = predict(object = als_model, newdata = ev_known, n = 10, type = "ratings")
+final1 = Sys.time() - start1
+```
+
+
+```{r}
+print(paste0("Computation Time: ", round(final1, 4), " seconds"))
+```
+
+## SPARK Recomendation System
+
+```{r}
+connect = spark_connect(master = "local")
+```
+
+
+```{r}
+sparkData = subset(movRate, select = c("movieId", "userId", "rating"))
+sparkMovies = copy_to(connect, sparkData, overwrite = TRUE)
+sparkMovies
+```
+
+```{r}
+start2 = Sys.time()
+sparkModel = ml_als_factorization(sparkMovies, rating.column = "rating", user.column = "userId", item.column = "movieId", iter.max = 5)
+final2 = Sys.time() - start2
+print(paste0("Spark Computation Time: ", round(final2, 4), " seconds"))
+```
+
+
+## Comparison
+
+```{r}
+
+ALS = calcPredictionAccuracy(x = als_model_pred, data = ev_unknown, byUser = FALSE)
+Spark_ALS = cbind(0, 0, 0)
+start3 = Sys.time()
+item_model = Recommender(data = ev_train, method = "IBCF")
+item_model_pred = predict(object = item_model, newdata = ev_known, n = 10, type = "ratings")
+final3 = Sys.time() - start3
+IBCF = calcPredictionAccuracy(x = item_model_pred, data = ev_unknown, byUser = FALSE)
+start4 = Sys.time()
+user_model = Recommender(data = ev_train, method = "UBCF")
+user_model_pred = predict(object = user_model, newdata = ev_known, n = 10, type = "ratings")
+final4 = Sys.time() - start4
+UBCF = calcPredictionAccuracy(x = user_model_pred, data = ev_unknown, byUser = FALSE)
+```
+
+```{r}
+tables = (cbind(rbind(IBCF, UBCF, ALS, Spark_ALS), rbind(final3, final4, final1, final2)))
+colnames(tables) = c("RMSE", "MSE", "MAE", "Time")
+rownames(tables) = c("IBCF", "UBCF", "ALS", "Spark_ALS")
+kable(round(tables,3))
+```
+
+```{r}
+spark_disconnect(connect)
+```
+
+
+
+
+
+
+
+
+
