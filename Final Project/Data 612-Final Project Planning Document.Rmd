@@ -1,0 +1,76 @@
+---
+title: "Data 612-Final Project Planning Document"
+author: "Joseph E. Garcia"
+date: "July 6, 2019"
+output: html_document
+---
+
+```{r}
+library(data.table)
+library(sparklyr)
+library(dplyr)
+```
+
+```{r}
+ratings <- fread("https://raw.githubusercontent.com/jgarcia71/Data-612-Projects-and-Assignments-Summer-2019/master/Final%20Project/ratings.dat",header = F,sep=':')
+head(ratings)
+```
+
+```{r}
+movies <- fread("https://raw.githubusercontent.com/jgarcia71/Data-612-Projects-and-Assignments-Summer-2019/master/Final%20Project/movies.csv",header = T,sep=',')
+head(movies)
+```
+
+```{r}
+ratings$V2 <- NULL
+ratings$V4 <- NULL
+ratings$V6 <- NULL
+ratings$V7 <- NULL
+
+colnames(ratings) <- c("userId","movieId","rating")
+
+# converting columns to datatypes
+ratings$userId <- as.numeric(ratings$userId)
+ratings$movieId <- as.numeric(ratings$movieId)
+ratings$rating <- as.numeric(ratings$rating)
+```
+
+```{r}
+sc <- spark_connect(master = "local")
+```
+
+```{r}
+data_ratings <- sdf_copy_to(sc, ratings, overwrite = TRUE)
+
+# create test and training partitions
+partitions <- data_ratings %>%  sdf_partition(training = 0.75, test = 0.25, seed = 1099)
+
+training <- partitions$training
+test <- partitions$test
+```
+
+```{r}
+model <- ml_als(training, rating_col = "rating",user_col = "userId",item_col= "movieId",
+                reg_param = 0.01,max_iter = 4)
+
+summary(model)
+```View(sc)
+
+
+```{r}
+predictions <- model$.model %>%
+  invoke("transform", spark_dataframe(test)) %>%
+  collect()
+
+# add movie title to predictions Df
+predictions_final <- setDT(predictions)[setDT(movies), title := i.title, on=c("movieId", "movieId")]
+
+# add genre to predictions df
+predictions_final <- setDT(predictions)[setDT(movies), genre := genres, on=c("movieId", "movieId")]
+
+head(predictions_final)
+
+```
+
+
+
